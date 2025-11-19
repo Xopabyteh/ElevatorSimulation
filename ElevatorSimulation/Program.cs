@@ -20,7 +20,7 @@ public static class Program
 		Console.OutputEncoding = System.Text.Encoding.UTF8;
 
 		var building = new Building(minFloor: 0, maxFloor: MaxFloor);
-
+		
 		if (TournamentMode)
 		{
 			RunTournament(building);
@@ -28,9 +28,9 @@ public static class Program
 		else
 		{
 			// Test single strategy
-			RunSingleSimulation("FIFO STRATEGY", new FifoStrategy(), building);
+			RunSingleSimulation("MaFi", new MaFiStrategy(), building);
 			Console.WriteLine("\n");
-			RunSingleSimulation("NEAREST FIRST STRATEGY", new NearestFirstStrategy(), building);
+			RunSingleSimulation("FIFO STRATEGY", new FifoStrategy(), building);
 		}
 	}
 
