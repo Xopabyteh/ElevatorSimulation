@@ -53,15 +53,18 @@ public class MaFiTrainer
         
         for (int i = 1; i <= iterations; i++)
         {
-            Console.WriteLine($"[{i}/{iterations}] Testing random configuration...");
-            
-            // Generate random configuration
-            var config = MaFiBiasConfig.CreateRandom(random);
+            // Generate random configuration based on current best (mutation-based search)
+            // This helps explore the space around good solutions
+            var config = MaFiBiasConfig.CreateRandom(random, _bestConfig, mutationRate: 0.3);
             
             // Evaluate configuration
             var score = EvaluateConfiguration(config);
+            if (i % 50 == 0 || i == iterations)
+            {
+                Console.WriteLine($"[{i}/{iterations}] Testing random configuration...");
+                Console.WriteLine($"  Score: {score:F2}");
+            }
             
-            Console.WriteLine($"  Score: {score:F2}");
             
             // Check if this is the best configuration
             if (score < _bestScore)
@@ -77,8 +80,6 @@ public class MaFiTrainer
                 SaveBestConfiguration(i, iterations);
                 Console.WriteLine($"  💾 Saved best configuration");
             }
-            
-            Console.WriteLine();
         }
         
         // Final save
@@ -198,36 +199,72 @@ public class MaFiBiasConfig
     {
         return new MaFiBiasConfig
         {
-            MPickUpBias = 2.0,
-            MDropOffBias = 1.0,
-            MOpenDoorBias = 3.0,
-            AMHeatMapBias = 1.0,
-            MPrioritizeCurrentDirectionBias = 3.0
+            MPickUpBias = 1.4,
+            MDropOffBias = 1.1,
+            MOpenDoorBias = 8.5,
+            AMHeatMapBias = 0.74,
+            MPrioritizeCurrentDirectionBias = 1.9
         };
     }
     
     /// <summary>
     /// Creates a random configuration with reasonable parameter ranges.
+    /// If a previous configuration is provided, it mutates the parameters around it.
     /// </summary>
-    public static MaFiBiasConfig CreateRandom(Random random)
+    /// <param name="random">Random number generator</param>
+    /// <param name="previousConfig">Optional previous configuration to mutate from</param>
+    /// <param name="mutationRate">How much to deviate from previous config (0.0 to 1.0)</param>
+    public static MaFiBiasConfig CreateRandom(Random random, MaFiBiasConfig? previousConfig = null, double mutationRate = 0.3)
     {
-        return new MaFiBiasConfig
+        if (previousConfig == null)
         {
-            // Pickup bias: 0.5 to 5.0
-            MPickUpBias = random.NextDouble() * 1 + 0.5,
-            
-            // Dropoff bias: 0.5 to 5.0
-            MDropOffBias = random.NextDouble() * 1 + 0.5,
-            
-            // Open door bias: 1.0 to 10.0
-            MOpenDoorBias = random.NextDouble() * 5.0 + 1.0,
+            // Generate completely random configuration
+            return new MaFiBiasConfig
+            {
+                // Pickup bias: 0.5 to 5.0
+                MPickUpBias = random.NextDouble() * 1 + 0.5,
+                
+                // Dropoff bias: 0.5 to 5.0
+                MDropOffBias = random.NextDouble() * 1 + 0.5,
+                
+                // Open door bias: 1.0 to 10.0
+                MOpenDoorBias = random.NextDouble() * 5.0 + 1.0,
 
-            // Heatmap bias: 0.0 to 2.0
-            AMHeatMapBias = random.NextDouble() * 1.0,
+                // Heatmap bias: 0.0 to 2.0
+                AMHeatMapBias = random.NextDouble() * 1.0,
 
-            // Current direction bias: 1.0 to 5.0
-            //MPrioritizeCurrentDirectionBias = random.NextDouble() * 4.0 + 1.0
-            MPrioritizeCurrentDirectionBias = 1,
-        };
+                // Current direction bias: 1.0 to 5.0
+                MPrioritizeCurrentDirectionBias = 1,
+            };
+        }
+        else
+        {
+            // Mutate previous configuration
+            return new MaFiBiasConfig
+            {
+                MPickUpBias = MutateValue(random, previousConfig.MPickUpBias, mutationRate, 0.5, 1.5),
+                MDropOffBias = MutateValue(random, previousConfig.MDropOffBias, mutationRate, 0.5, 1.5),
+                MOpenDoorBias = MutateValue(random, previousConfig.MOpenDoorBias, mutationRate, 1.0, 10.0),
+                AMHeatMapBias = MutateValue(random, previousConfig.AMHeatMapBias, mutationRate, 0.0, 1.0),
+                MPrioritizeCurrentDirectionBias = MutateValue(random, previousConfig.MPrioritizeCurrentDirectionBias, mutationRate, 1.0, 5.0),
+            };
+        }
+    }
+
+    /// <summary>
+    /// Mutates a value by adding random noise while respecting min/max bounds.
+    /// </summary>
+    private static double MutateValue(Random random, double currentValue, double mutationRate, double min, double max)
+    {
+        // Calculate the range for mutation
+        double range = max - min;
+        double maxDeviation = range * mutationRate;
+        
+        // Add random deviation (can be positive or negative)
+        double deviation = (random.NextDouble() * 2 - 1) * maxDeviation;
+        double newValue = currentValue + deviation;
+        
+        // Clamp to valid range
+        return Math.Clamp(newValue, min, max);
     }
 }

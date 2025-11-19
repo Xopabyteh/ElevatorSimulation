@@ -6,12 +6,11 @@ internal class MaFiStrategy : IElevatorStrategy
     // A Prefix = add
     // AM Prefix = add/multiply (setting to 0 means no effect)
 
-    public double MPickUpBias = 2.0;
-    public double MDropOffBias = 1.0;
-    public double MOpenDoorBias = 3.0;
-           
-    public double AMHeatMapBias = 1.0;
-    public double MPrioritizeCurrentDirectionBias = 3;
+    public double MPickUpBias = 1.5;
+    public double MDropOffBias = 0.9;
+    public double MOpenDoorBias = 7.8;
+    public double AMHeatMapBias = 0.98;
+    public double MPrioritizeCurrentDirectionBias = 1.8;
 
 
     public MoveResult DecideNextMove(ElevatorSystem elevator)
