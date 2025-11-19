@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ElevatorSimulation.Strategies;
+﻿namespace ElevatorSimulation.Strategies;
 
 internal class MaFiStrategy : IElevatorStrategy
 {
@@ -13,12 +6,12 @@ internal class MaFiStrategy : IElevatorStrategy
     // A Prefix = add
     // AM Prefix = add/multiply (setting to 0 means no effect)
 
-    public const double MPickUpBias = 2.0;
-    public const double MDropOffBias = 1.0;
-    public const double MOpenDoorBias = 5000000.0;
-
-    public const double AMHeatMapBias = 0.8;
-    public const double MPrioritizeCurrentDirectionBias = 3;
+    public double MPickUpBias = 2.0;
+    public double MDropOffBias = 1.0;
+    public double MOpenDoorBias = 3.0;
+           
+    public double AMHeatMapBias = 1.0;
+    public double MPrioritizeCurrentDirectionBias = 3;
 
 
     public MoveResult DecideNextMove(ElevatorSystem elevator)
@@ -49,18 +42,20 @@ internal class MaFiStrategy : IElevatorStrategy
         }
     }
 
-    private static Dictionary<int, double> GetScores(ElevatorSystem elevator)
+    private Dictionary<int, double> GetScores(ElevatorSystem elevator)
     {
         var floorMoveScores = new Dictionary<int, double>();
 
         SetBaseRiderScores(elevator, floorMoveScores);
-        AddHeatMapScores(elevator, floorMoveScores);
+        AddHeatMapScores(elevator, floorMoveScores);    
         AddSameDirectionScore(elevator, floorMoveScores);
+
+        AddOpenDoorScore(elevator, floorMoveScores); // Always at the end...
 
         return floorMoveScores;
     }
 
-    private static void SetBaseRiderScores(ElevatorSystem elevator, Dictionary<int, double> floorMoveScores)
+    private void SetBaseRiderScores(ElevatorSystem elevator, Dictionary<int, double> floorMoveScores)
     {
         for (int floor = elevator.Building.MinFloor; floor <= elevator.Building.MaxFloor; floor++)
         {
@@ -74,37 +69,31 @@ internal class MaFiStrategy : IElevatorStrategy
             score += waitingRiders.Length * MPickUpBias;
             score += activeRiders.Length * MDropOffBias;
 
-            // If we are on the active floor, give a bonus to opening the door
-            if (floor == elevator.CurrentElevatorFloor)
-            {
-                score *= MOpenDoorBias;
-            }
-
             floorMoveScores[floor] = score;
         }
     }
 
-    private static void AddHeatMapScores(ElevatorSystem elevator, Dictionary<int, double> floorMoveScores)
+    private void AddHeatMapScores(ElevatorSystem elevator, Dictionary<int, double> floorMoveScores)
     {
         // Take each floor and add the score of floors around it (1 above + 1 below)
-        var heatmapScores = new Dictionary<int, double>(floorMoveScores);
+        var heatmapScores = new Dictionary<int, double>(floorMoveScores.Count);
 
         for (int floor = elevator.Building.MinFloor; floor <= elevator.Building.MaxFloor; floor++)
         {
             double heatmapScore = 0d;
 
-            // Add score from the floor itself (copied from floorMoveScores)
-            heatmapScore += heatmapScores[floor];
+            // Add score from the floor itself
+            heatmapScore += floorMoveScores[floor];
             
             // Add score from the floor above
             if (floor < elevator.Building.MaxFloor)
             {
-                heatmapScore += heatmapScores[floor + 1];
+                heatmapScore += floorMoveScores[floor + 1];
             }
             // Add score from the floor below
             if (floor > elevator.Building.MinFloor)
             {
-                heatmapScore += heatmapScores[floor - 1];
+                heatmapScore += floorMoveScores[floor - 1];
             }
 
             heatmapScore /= 3.0; // Average score
@@ -115,27 +104,47 @@ internal class MaFiStrategy : IElevatorStrategy
         }
     }
 
-    private static void AddSameDirectionScore(ElevatorSystem elevator , Dictionary<int, double> floorMoveScores)
+    private void AddSameDirectionScore(ElevatorSystem elevator , Dictionary<int, double> floorMoveScores)
     {
         // If the elevator is moving up, prioritize floors above
         // If the elevator is moving down, prioritize floors below
+
+        // Only do so if there are active riders or pending requests in that direction
         if (elevator.CurrentElevatorDirection == Direction.Up)
         {
-            for (int floor = elevator.CurrentElevatorFloor + 1; floor <= elevator.Building.MaxFloor; floor++)
+            bool hasUpRequests = elevator.PendingRequests.Any(r => r.From > elevator.CurrentElevatorFloor) ||
+                                 elevator.ActiveRiders.Any(r => r.To > elevator.CurrentElevatorFloor);
+            if (hasUpRequests)
             {
-                floorMoveScores[floor] *= MPrioritizeCurrentDirectionBias;
+                for (int floor = elevator.CurrentElevatorFloor + 1; floor <= elevator.Building.MaxFloor; floor++)
+                {
+                    floorMoveScores[floor] *= MPrioritizeCurrentDirectionBias;
+                }
             }
         }
         else if (elevator.CurrentElevatorDirection == Direction.Down)
         {
-            for (int floor = elevator.Building.MinFloor; floor < elevator.CurrentElevatorFloor; floor++)
+            bool hasDownRequests = elevator.PendingRequests.Any(r => r.From < elevator.CurrentElevatorFloor) ||
+                                   elevator.ActiveRiders.Any(r => r.To < elevator.CurrentElevatorFloor);
+            if (hasDownRequests)
             {
-                floorMoveScores[floor] *= MPrioritizeCurrentDirectionBias;
+                for (int floor = elevator.Building.MinFloor; floor < elevator.CurrentElevatorFloor; floor++)
+                {
+                    floorMoveScores[floor] *= MPrioritizeCurrentDirectionBias;
+                }
             }
         }
     }
 
-
+    private void AddOpenDoorScore(ElevatorSystem elevator, Dictionary<int, double> floorMoveScores)
+    {
+        var currentFloor = elevator.CurrentElevatorFloor;
+        if (elevator.PendingRequests.Any(r => r.From == currentFloor) ||
+            elevator.ActiveRiders.Any(r => r.To == currentFloor))
+        {
+            floorMoveScores[currentFloor] *= MOpenDoorBias;
+        }
+    }
 
     private MoveResult MoveTowardsFloor(ElevatorSystem elevator, int targetFloor)
     {
