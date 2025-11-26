@@ -21,6 +21,11 @@ public static class Program
 
 		var building = new Building(minFloor: 0, maxFloor: MaxFloor);
 
+		// Run MaFi Trainer
+		//RunMaFiTrainer(building);
+		//return;
+		// Uncomment below to run tournament
+
 		if (TournamentMode)
 		{
 			RunTournament(building);
@@ -32,6 +37,20 @@ public static class Program
 			Console.WriteLine("\n");
 			//RunSingleSimulation("NEAREST FIRST STRATEGY", new NearestFirstStrategy(), building);
 		}
+
+	}
+
+	/// <summary>
+	/// Runs the MaFi strategy trainer.
+	/// </summary>
+	private static void RunMaFiTrainer(Building building)
+	{
+		// Generate evaluation seeds
+		var random = new Random(RandomSeed);
+		var evaluationSeeds = Enumerable.Range(1, 500).Select(_ => random.Next()).ToArray();
+		
+		var trainer = new MaFiTrainer(building, evaluationSeeds, @"C:\users\xopab\desktop\MaFi_Training_Results.txt");
+		trainer.Train(printEveryN: 10);
 	}
 
 	/// <summary>
